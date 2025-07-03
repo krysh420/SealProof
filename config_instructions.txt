@@ -1,0 +1,4 @@
+The config.txt file must contain the path to all files and folders you want to add to the checklist
+the format should be:
+<DriveLetter>:\Path\To\File.extension // Incase of single file
+<DriveLetter>:\Path\To\Folder // Add entire folder. Ensure no nested folders, incase of nested folders, add them one by one in seperate lines
