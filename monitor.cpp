@@ -46,7 +46,7 @@ string sanitizeFilename(const string& path) {
     return safe;
 }
 
-bool isInRestrictedTime(time_t t) { // As the name suggests
+bool isInRestrictedTime(time_t t) { // As the name suggests, checks if file was accessed during restricted time
     tm* local = localtime(&t);
     int hour = local->tm_hour;
     int minute = local->tm_min;
