@@ -89,7 +89,7 @@ reg add HKCU\Software\Microsoft\Windows\CurrentVersion\Run /v SealProof /t REG_S
 
 ### ✏️ 5. Update Config via CLI
 
-* Add entry to config.txt from project folder.
+* Add entry to config.txt in project folder.
 * Run `update_config.exe`
 ```bash
 update_config.exe
