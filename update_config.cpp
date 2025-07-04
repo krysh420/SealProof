@@ -21,7 +21,7 @@ using namespace std;
 
 // Directories used NOTE: BE SURE IT IS SAME FOR BOTH monitor.cpp AND THIS FILE
 #define HASH_PATH      "C:\\ProgramData\\SealProof\\stored_hashes.txt"
-#define CONFIG_SRC     "config.txt" // This code should be executed in the same folder as project/updated config.txt
+#define CONFIG_SRC     "config.txt"
 #define CONFIG_DEST    "C:\\ProgramData\\SealProof\\config.txt"
 #define BACKUP_FOLDER  "C:\\ProgramData\\SealProof\\backups"
 
@@ -61,15 +61,25 @@ bool createDirectory(const char* path) { // Creates directory if not exist
     return _mkdir(path) == 0;
 }
 
-vector<string> getFilesFromConfig() { // Creates hashes for files added to config file and store them, creates backup too
-    vector<string> files; 
+
+vector<string> getFilesFromConfig() {
+    vector<string> files;
     ifstream cfg(CONFIG_DEST);
+    if (!cfg.is_open()) {
+        MessageBoxA(NULL, "Failed to open ProgramData\\config.txt", "SealProof", MB_ICONERROR);
+        return files;
+    }
+
     string line;
     while (getline(cfg, line)) {
+        line.erase(0, line.find_first_not_of(" \t\r\n"));
+        line.erase(line.find_last_not_of(" \t\r\n") + 1);
+        if (line.empty()) continue;
+
         DWORD attr = GetFileAttributesA(line.c_str());
-        if (attr != INVALID_FILE_ATTRIBUTES && !(attr & FILE_ATTRIBUTE_DIRECTORY)) { // If file not already part of it, push it to list of files
+        if (attr != INVALID_FILE_ATTRIBUTES && !(attr & FILE_ATTRIBUTE_DIRECTORY)) {
             files.push_back(line);
-        } else { // If folder, iterate through folder and add files
+        } else if (attr != INVALID_FILE_ATTRIBUTES && (attr & FILE_ATTRIBUTE_DIRECTORY)) {
             WIN32_FIND_DATAA fd;
             HANDLE hFind = FindFirstFileA((line + "\\*").c_str(), &fd);
             if (hFind != INVALID_HANDLE_VALUE) {
@@ -79,11 +89,15 @@ vector<string> getFilesFromConfig() { // Creates hashes for files added to confi
                 } while (FindNextFileA(hFind, &fd));
                 FindClose(hFind);
             }
+        } else {
+            // Debug: Warn invalid entry
+            // string msg = "Invalid or unreadable path: " + line;
+            // MessageBoxA(NULL, msg.c_str(), "SealProof", MB_ICONWARNING);
         }
     }
-    return files; // Return vector of string containing file names
-}
 
+    return files;
+}
 void backupFile(const string& filePath) { // Creates backup of files in config file
     string fileName = filePath.substr(filePath.find_last_of("\\/") + 1);
     string backupPath = string(BACKUP_FOLDER) + "\\" + fileName;
@@ -93,35 +107,65 @@ void backupFile(const string& filePath) { // Creates backup of files in config f
     dst << src.rdbuf();
 }
 
+
 int main() {
-    // Step 1: Copy updated config.txt to ProgramData
+    // === Step 1: Copy updated config.txt to ProgramData
     ifstream src(CONFIG_SRC, ios::binary);
-    ofstream dst(CONFIG_DEST, ios::binary);
-    if (!src || !dst) {
-        MessageBoxA(NULL, "Failed to update config.txt", "SealProof", MB_ICONERROR);
+    if (!src.is_open()) {
+        MessageBoxA(NULL, "Could not find config.txt in current folder.", "SealProof", MB_ICONERROR);
         return 1;
     }
-    dst << src.rdbuf();
 
-    // Step 2: Create backup folder
+    ofstream dst(CONFIG_DEST, ios::binary);
+    if (!dst.is_open()) {
+        MessageBoxA(NULL, "Could not write to ProgramData\\config.txt", "SealProof", MB_ICONERROR);
+        return 1;
+    }
+
+    dst << src.rdbuf();
+    src.close();
+    dst.close();
+
+    // === Step 2: Create backup folder
     createDirectory(BACKUP_FOLDER);
 
-    // Step 3: Generate and save hashes, create backups
-    ofstream out(HASH_PATH, ios::trunc);
+    // === Step 3: Read config and generate hashes
     vector<string> files = getFilesFromConfig();
+    if (files.empty()) {
+        MessageBoxA(NULL, "No valid files found in config.txt", "SealProof", MB_ICONERROR);
+        return 1;
+    }
 
+    string tempHashPath = string(HASH_PATH) + ".tmp";
+    ofstream out(tempHashPath, ios::trunc);
+    if (!out.is_open()) {
+        MessageBoxA(NULL, "Failed to create temporary hash file.", "SealProof", MB_ICONERROR);
+        return 1;
+    }
+
+    bool wroteSomething = false;
     for (const string& file : files) {
         string hash = getFileHash(file);
         if (!hash.empty()) {
             out << file << "|" << hash << endl;
             backupFile(file);
+            wroteSomething = true;
         }
     }
 
-    MessageBoxA(NULL, "Config updated and hashes regenerated.", "SealProof", MB_OK | MB_ICONINFORMATION);
+    out.close();
+
+    if (wroteSomething) {
+        remove(HASH_PATH);
+        rename(tempHashPath.c_str(), HASH_PATH);
+        MessageBoxA(NULL, "Config updated and hashes regenerated.", "SealProof", MB_OK | MB_ICONINFORMATION);
+    } else {
+        remove(tempHashPath.c_str());
+        MessageBoxA(NULL, "No valid hashes were generated. Check file paths.", "SealProof", MB_ICONWARNING);
+    }
+
     return 0;
 }
-
 
 
 
