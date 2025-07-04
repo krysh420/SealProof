@@ -46,7 +46,7 @@ string sanitizeFilename(const string& path) {
     return safe;
 }
 
-bool isInRestrictedTime(time_t t) { // As the name suggests, checks if file was accessed during restricted time
+bool isInRestrictedTime(time_t t) { // As the name suggests
     tm* local = localtime(&t);
     int hour = local->tm_hour;
     int minute = local->tm_min;
@@ -152,6 +152,18 @@ void saveHashes(const map<string, string>& hashes) { // Stores hashes in stored_
         out << p.first << "|" << p.second << endl; // Hashes stored in format: <hash>:Path/to/file/from/config.txt
 }
 
+bool saveHashesTemp(const map<string, string>& hashes, const string& tempPath) { // Temporary saving the hash before writing to main
+    ofstream out(tempPath);
+    if (!out.is_open()) return false;
+
+    for (const auto& p : hashes)
+        out << p.first << "|" << p.second << endl;
+
+    out.close();
+    return true;
+}
+
+
 int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int) { // Main function, refer to https://learn.microsoft.com/en-us/windows/win32/apiindex/windows-api-list
     map<string, string> stored;
     ifstream in(HASH_FILE); // Loading stored hashes
@@ -184,7 +196,23 @@ int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int) { // Main function, refer t
         }
     }
 
-    saveHashes(updated);
+    string tempHashFile = HASH_FILE + ".tmp";
+
+    if (saveHashesTemp(updated, tempHashFile)) {
+        if (tampered.empty()) {
+            // Only update stored_hashes.txt if no tampering
+            remove(HASH_FILE.c_str());
+            rename(tempHashFile.c_str(), HASH_FILE.c_str());
+        } else {
+            // Leave original intact, log location of new temp hashes
+            logTampering("Tampering detected - skipping hash update. Temp hashes at: " + tempHashFile);
+            MessageBoxA(NULL, tampered.c_str(), "SealProof - Tampered Files", MB_ICONWARNING);
+        }
+    } else {
+        logTampering("ERROR: Failed to write temporary hashes.");
+        MessageBoxA(NULL, "Failed to write updated hashes!", "SealProof - Error", MB_ICONERROR);
+    }
+
 
     if (!tampered.empty())
         MessageBoxA(NULL, tampered.c_str(), "SealProof - Tampered Files", MB_ICONWARNING);
